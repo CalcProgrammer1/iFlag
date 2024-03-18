@@ -90,17 +90,20 @@ namespace iFlag
                                                   // in the list is used in that cae
         private void initiationTimer_Tick(object sender, EventArgs e)
         {
-            port = ports[ports.Length - 1];
-            
-            if (!deviceConnected && port != "COM1")
+            if (ports.Length > 0)
             {
-                initiationTimer.Stop();
-                initiateBoardMenuItem.Visible = true;
-                initiateBoardMenuItem.Text += port;
-            }
-            else
-            {
-                startCommunication();
+                port = ports[ports.Length - 1];
+
+                if (!deviceConnected && port != "COM1")
+                {
+                    initiationTimer.Stop();
+                    initiateBoardMenuItem.Visible = true;
+                    initiateBoardMenuItem.Text += port;
+                }
+                else
+                {
+                    startCommunication();
+                }
             }
         }
 

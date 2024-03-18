@@ -44,11 +44,91 @@ namespace iFlag
         const byte COLOR_DIM_TEAL =     14;
         const byte COLOR_DIM_PURPLE =   15;
 
+        OpenRGB.NET.Models.Color flag_idx_to_openrgb_color(Byte idx)
+        {
+            OpenRGB.NET.Models.Color color = new OpenRGB.NET.Models.Color(0, 0, 0);
+
+            switch(idx)
+            {
+                case COLOR_BLACK:
+                    color = new OpenRGB.NET.Models.Color(0, 0, 0);
+                    break;
+
+                case COLOR_WHITE:
+                    color = new OpenRGB.NET.Models.Color(255, 255, 255);
+                    break;
+
+                case COLOR_RED:
+                    color = new OpenRGB.NET.Models.Color(255, 0, 0);
+                    break;
+
+                case COLOR_GREEN:
+                    color = new OpenRGB.NET.Models.Color(0, 255, 0);
+                    break;
+
+                case COLOR_BLUE:
+                    color = new OpenRGB.NET.Models.Color(0, 0, 255);
+                    break;
+
+                case COLOR_YELLOW:
+                    color = new OpenRGB.NET.Models.Color(255, 255, 0);
+                    break;
+
+                case COLOR_TEAL:
+                    color = new OpenRGB.NET.Models.Color(0, 255, 255);
+                    break;
+
+                case COLOR_PURPLE:
+                    color = new OpenRGB.NET.Models.Color(255, 0, 255);
+                    break;
+
+                case COLOR_ORANGE:
+                    color = new OpenRGB.NET.Models.Color(255, 64, 0);
+                    break;
+
+                case COLOR_DIM_WHITE:
+                    color = new OpenRGB.NET.Models.Color(64, 64, 0);
+                    break;
+
+                case COLOR_DIM_RED:
+                    color = new OpenRGB.NET.Models.Color(64, 0, 0);
+                    break;
+
+                case COLOR_DIM_GREEN:
+                    color = new OpenRGB.NET.Models.Color(0, 64, 0);
+                    break;
+
+                case COLOR_DIM_BLUE:
+                    color = new OpenRGB.NET.Models.Color(0, 0, 64);
+                    break;
+
+                case COLOR_DIM_YELLOW:
+                    color = new OpenRGB.NET.Models.Color(64, 64, 0);
+                    break;
+
+                case COLOR_DIM_TEAL:
+                    color = new OpenRGB.NET.Models.Color(0, 64, 64);
+                    break;
+
+                case COLOR_DIM_PURPLE:
+                    color = new OpenRGB.NET.Models.Color(64, 0, 64);
+                    break;
+            }
+
+            return color;
+        }
+
+        OpenRGB.NET.OpenRGBClient openrgb_client = new OpenRGB.NET.OpenRGBClient("127.0.0.1", 6742, "iFlag", true, 1000, 2);
+        OpenRGB.NET.Models.Device[] openrgb_devices;
+
         private void startMatrix()
         {
             resetOverlay();
             setMatrixLuma();
             // matrixToDevice();
+
+            openrgb_client.Connect();
+            openrgb_devices = openrgb_client.GetAllControllerData();
         }
 
         private void setMatrixLuma()
@@ -127,6 +207,64 @@ namespace iFlag
 
                 matrixToDevice();
             } 
+
+            for (uint device = 0; device < openrgb_devices.Length; device++)
+            {
+                uint led_offset = 0;
+
+                for (uint zone = 0; zone < openrgb_devices[device].Zones.Length; zone++)
+                {
+                    uint zone_leds = openrgb_devices[device].Zones[zone].LedCount;
+                    OpenRGB.NET.Models.MatrixMap zone_matrix = openrgb_devices[device].Zones[zone].MatrixMap;
+
+                    switch (openrgb_devices[device].Zones[zone].Type)
+                    {
+                        case OpenRGB.NET.Enums.ZoneType.Single:
+                            for (uint led_in_zone = 0; led_in_zone < zone_leds; led_in_zone++)
+                            {
+                                // Set all LEDs in a Single type zone to the center of the flag (position 4,4)
+                                openrgb_devices[device].Colors[led_in_zone + led_offset] = flag_idx_to_openrgb_color(flagMatrix[0, 4, 4]);
+                            }
+                            break;
+
+                        case OpenRGB.NET.Enums.ZoneType.Matrix:
+                            // If matrix map is populated, set all LEDs in a Matrix type zone to a scaled representation of the flag matrix
+                            if(zone_matrix != null)
+                            {
+                                for (uint index_in_matrix = 0; index_in_matrix < zone_matrix.Matrix.Length; index_in_matrix++)
+                                {
+                                    uint matrix_x = index_in_matrix % zone_matrix.Width;
+                                    uint matrix_y = index_in_matrix / zone_matrix.Width;
+
+                                    uint x = ((8 * matrix_x) / zone_matrix.Width);
+                                    uint y = ((8 * matrix_y) / zone_matrix.Height);
+
+                                    if (zone_matrix.Matrix[matrix_y, matrix_x] != 0xFFFFFFFF)
+                                    {
+                                        openrgb_devices[device].Colors[led_offset + zone_matrix.Matrix[matrix_y, matrix_x]] = flag_idx_to_openrgb_color(flagMatrix[0, x, y]);
+                                    }
+                                }
+                                break;
+                            }
+
+                            // Intentional fall-through, treat matrix zones without map as linear zones
+                            goto case OpenRGB.NET.Enums.ZoneType.Linear;
+
+                        case OpenRGB.NET.Enums.ZoneType.Linear:
+                            for (uint led_in_zone = 0; led_in_zone < zone_leds; led_in_zone++)
+                            {
+                                // Set all LEDs in a Linear type zone to the center row of the flag (line 4), scaled to device length
+                                uint x = ((8 * led_in_zone) / zone_leds);
+                                openrgb_devices[device].Colors[led_in_zone + led_offset] = flag_idx_to_openrgb_color(flagMatrix[0, x, 4]);
+                            }
+                            break;
+                    }
+
+                    led_offset += zone_leds;
+                }
+
+                openrgb_client.UpdateLeds((int)device, openrgb_devices[device].Colors);
+            }
 
             return true;
         }
